@@ -28,14 +28,20 @@ public sealed partial class ContainerLoadingApp
         var stats = ShipmentIntelligence.Statistics(shipment); var content = BuildPage(string.IsNullOrWhiteSpace(shipment.orderReference) ? shipment.shipmentName : shipment.orderReference, "Shipment / Chuyến hàng", false, OpenHome); StatusBanner(content, status);
         var summary = Horizontal(content, "ShipmentSummary", 10); StatCard(summary, stats.ContainerCount.ToString(), "Container"); StatCard(summary, stats.TotalUnits.ToString(), "Tổng kiện"); StatCard(summary, stats.PlacedUnits.ToString(), "Đã xếp"); StatCard(summary, stats.RemainingUnits.ToString(), "Còn lại");
         var info = Vertical(content, "ShipmentInfo", UiSurface, 8, 20); MobileText(info, "Khách hàng: " + (string.IsNullOrWhiteSpace(shipment.customerName) ? "Chưa có" : shipment.customerName), 23, UiText); MobileText(info, "Điểm đến: " + (string.IsNullOrWhiteSpace(shipment.destination) ? "Chưa có" : shipment.destination), 23, UiText); MobileText(info, $"Tiến độ: {stats.CompletionPercent:0.#}% · Trọng lượng: {stats.TotalWeight:0.##} kg", 23, UiText, FontStyle.Bold); ProgressBar(info, stats.TotalUnits == 0 ? 0 : stats.PlacedUnits / (float)stats.TotalUnits);
-        SectionHeader(content, "PHƯƠNG ÁN ĐỀ XUẤT", "So sánh theo hoàn thành, số container, cảnh báo, cân bằng tải và utilization");
+        SectionHeader(content, "XẾP HÀNG TỰ ĐỘNG", "Tạo các cách xếp thử để bạn so sánh trước khi áp dụng");
         if (optimizationRunning)
         {
             var running = Vertical(content, "OptimizationRunning", UiPrimarySoft, 8, 22); MobileText(running, "Đang tính phương án…", 27, UiPrimary, FontStyle.Bold); MobileText(running, "Sơ đồ hiện tại không bị thay đổi. Tiến trình không hiển thị phần trăm giả.", 22, UiMuted); MobileButton(running, "HỦY", CancelOptimization, false, true);
         }
         else
         {
-            var optimize = MobileButton(content, "TẠO PHƯƠNG ÁN ĐỀ XUẤT", GenerateSuggestedScenarios, true); optimize.interactable = shipment.cargoTypes.Count > 0 && shipment.containers.Count > 0;
+            var hasContainer = shipment.containers.Count > 0;
+            var hasCargo = shipment.cargoTypes.Any(x => x.quantity > 0);
+            var optimize = MobileButton(content, "TẠO 3 CÁCH XẾP ĐỂ SO SÁNH", GenerateSuggestedScenarios, true);
+            optimize.interactable = hasContainer && hasCargo;
+            if (!hasContainer) MobileText(content, "Chưa thể tạo: hãy thêm ít nhất 1 container.", 22, UiWarning, FontStyle.Bold);
+            else if (!hasCargo) MobileText(content, "Chưa thể tạo: chuyến hàng chưa có loại hàng nào.", 22, UiWarning, FontStyle.Bold);
+            else MobileText(content, "Sơ đồ hiện tại được giữ nguyên cho đến khi bạn chọn Áp dụng.", 22, UiMuted);
             if (!string.IsNullOrWhiteSpace(shipment.restoreScenarioId)) MobileButton(content, "KHÔI PHỤC BẢN XẾP TRƯỚC KHI ÁP DỤNG", RestoreBeforeScenario);
         }
         foreach (var scenario in shipment.scenarios.Where(x => !x.workingSnapshot))
