@@ -1,0 +1,81 @@
+name: Android Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-build-release:
+    runs-on: ubuntu-latest
+    env:
+      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: ContainerLoadingApp/Library
+          key: unity-library-android-${{ hashFiles('ContainerLoadingApp/Packages/**', 'ContainerLoadingApp/ProjectSettings/**') }}
+          restore-keys: unity-library-android-
+
+      - name: EditMode tests
+        uses: game-ci/unity-test-runner@v4
+        with:
+          projectPath: ContainerLoadingApp
+          testMode: EditMode
+          artifactsPath: test-results
+
+      - name: Calculate version
+        shell: bash
+        run: |
+          echo "VERSION_NAME=3.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$((300000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+
+      - name: Build signed APK
+        uses: game-ci/unity-builder@v4
+        env:
+          ANDROID_KEYSTORE_PATH: container-loading-release.keystore
+          ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEYALIAS_NAME }}
+          ANDROID_KEY_ALIAS_PASS: ${{ secrets.ANDROID_KEYALIAS_PASS }}
+        with:
+          projectPath: ContainerLoadingApp
+          targetPlatform: Android
+          buildMethod: AndroidBuilder.Build
+          customParameters: -buildOutput build/Android/ContainerLoading.apk -versionName ${{ env.VERSION_NAME }} -versionCode ${{ env.VERSION_CODE }} -requireSigning true
+          androidKeystoreName: container-loading-release.keystore
+          androidKeystoreBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          androidKeystorePass: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          androidKeyaliasName: ${{ secrets.ANDROID_KEYALIAS_NAME }}
+          androidKeyaliasPass: ${{ secrets.ANDROID_KEYALIAS_PASS }}
+
+      - name: Prepare release asset
+        shell: bash
+        run: |
+          mkdir -p release
+          apk="$(find build -type f -name '*.apk' -print -quit)"
+          test -n "$apk"
+          cp "$apk" release/ContainerLoading.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ContainerLoading-${{ env.VERSION_NAME }}
+          path: release/ContainerLoading.apk
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="v${VERSION_NAME}"
+          gh release create "$tag" release/ContainerLoading.apk --title "Container Loading ${VERSION_NAME}" --notes "Bản Android tự động từ commit ${GITHUB_SHA}." --latest

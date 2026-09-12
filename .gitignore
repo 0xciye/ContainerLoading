@@ -1,0 +1,32 @@
+# Unity generated data
+/ContainerLoadingApp/[Ll]ibrary/
+/ContainerLoadingApp/[Tt]emp/
+/ContainerLoadingApp/.utmp/
+/ContainerLoadingApp/[Oo]bj/
+/ContainerLoadingApp/[Ll]ogs/
+/ContainerLoadingApp/[Uu]ser[Ss]ettings/
+/ContainerLoadingApp/[Bb]uild/
+/ContainerLoadingApp/[Bb]uilds/
+/ContainerLoadingApp/TestResults/
+/ContainerLoadingApp/tmp/
+/ContainerLoadingApp/output/pdf/*.pdf
+/ContainerLoadingApp/graphify-out/
+/ContainerLoadingApp/*.csproj
+/ContainerLoadingApp/*.sln*
+
+# Local logs and artifacts
+/*.log
+/test-results.xml
+/.codex/**/__pycache__/
+*.pyc
+*.keystore
+*.jks
+*.apk
+*.aab
+
+# IDE / OS
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
