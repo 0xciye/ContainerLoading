@@ -23,7 +23,7 @@ Bottom navigation chuyển thật giữa Home và Settings. Màn hình con có n
 
 ## Container Management
 
-Home đọc mọi file JSON trong thư mục `Plans`, cô lập file hỏng và hiển thị cảnh báo số file lỗi; dữ liệu hợp lệ được sắp theo thời gian cập nhật và tính số thùng/dung tích từ model. Search khớp không phân biệt hoa thường với tên phương án, container, mã đơn, khách hàng.
+Home đọc Shipment schema 3 trong thư mục `Shipments` và hiển thị mỗi chuyến hàng thành một card tổng hợp. Shipment Detail là hub KPI và danh sách container; editor vẫn mở độc lập theo từng container nhưng cargo remaining luôn lấy từ toàn Shipment.
 
 ## Create/Edit/Delete Workflow
 
@@ -31,7 +31,7 @@ Create kiểm tra mã bắt buộc và ba kích thước nguyên dương trướ
 
 ## Data Persistence
 
-`PlanPersistence` lưu mỗi phương án thành JSON trong `Application.persistentDataPath/Plans`. Save dùng file tạm + flush/replace, cập nhật `updatedAt`; rename xóa file cũ sau khi file mới được ghi. Import kiểm tra schema/size trước khi ghi và tự tránh ghi đè. Export tạo bản sao trong `Exports`. Dữ liệu vẫn tồn tại sau khi đóng/mở lại app và khi cài đè APK; gỡ ứng dụng có thể xóa vùng dữ liệu riêng.
+`ShipmentPersistence` lưu toàn bộ metadata, cargo, container và placement trong một JSON schema 3 dưới `Application.persistentDataPath/Shipments`. Save dùng file tạm + replace; backup/import bảo toàn quan hệ. Nếu chỉ có dữ liệu V2 trong `Plans`, migration tạo Shipment tương ứng mà không xóa source và không lặp lại khi chạy sau.
 
 ## Design System
 
@@ -51,7 +51,7 @@ Trường kích thước dùng numeric keyboard; text field dùng keyboard chu�
 
 ## V3 reliability và testing
 
-41/41 EditMode tests đạt, gồm placement nhiều tầng, bounds/collision, quantity, rotation, stackability, statistics/status, auto-fill, 500 placements, JSON/backup/CSV, update parsing và PDF 50 cargo types. APK V3 đã cài và mở thật trên LDPlayer; Home, Create, Detail, Cargo search/filter và palette color được review trực quan. Instance LDPlayer báo ADB `offline`, vì vậy thao tác nhập liệu tự động end-to-end trên emulator không được ghi nhận là đạt; full-container 300/300 và PDF bốn trang được chạy bằng production services trong Unity batch QA.
+47/47 EditMode tests đạt, gồm placement nhiều tầng, bounds/collision, quota xuyên 3 container, remove/delete/duplicate, migration V2, Shipment persistence/backup, auto-fill, 500 placements, update parsing và PDF. QA report production tạo Shipment A=100/B=50/C=25 phân bổ đủ trên 3 container; PDF 8 trang đã render và kiểm tra trực quan. APK V3.1 đã cài/mở qua LDPlayer CLI; ADB của instance vẫn báo `offline`, nên không thể ghi nhận thao tác UI tự động bằng bridge.
 
 ## Known Limitations
 

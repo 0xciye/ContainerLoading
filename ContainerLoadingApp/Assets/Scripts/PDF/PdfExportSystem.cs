@@ -11,6 +11,20 @@ public static class PdfExportSystem
     const float PageWidth = 595f, PageHeight = 842f;
     public static string OutputDirectoryOverride { get; set; }
 
+    public static string Export(Shipment shipment)
+    {
+        if (!ShipmentPersistence.TryValidate(shipment, out var error)) throw new InvalidDataException(error);
+        var fontAsset = Resources.Load<TextAsset>("NotoSans-Regular");
+        if (fontAsset == null || fontAsset.bytes.Length == 0) throw new FileNotFoundException("Thiếu font Unicode Noto Sans.");
+        var pages = BuildShipmentPages(shipment);
+        for (var i = 0; i < pages.Count; i++) { Text(pages[i], 40, 22, 7, $"Chuyến hàng: {shipment.orderReference}  ·  Tạo lúc {DateTime.Now:dd/MM/yyyy HH:mm}  ·  ContainerLoading v{Application.version}"); Text(pages[i], 505, 22, 7, $"{i + 1}/{pages.Count}"); }
+        var reference = string.IsNullOrWhiteSpace(shipment.orderReference) ? shipment.shipmentName : shipment.orderReference;
+        var fileName = $"Shipment_{PlanPersistence.SafeName(reference)}_{DateTime.Now:yyyyMMdd}.pdf";
+        var preferredPath = string.IsNullOrWhiteSpace(OutputDirectoryOverride) ? AndroidDocumentsPath(fileName) : Path.Combine(OutputDirectoryOverride, fileName);
+        try { WritePdf(preferredPath, pages, fontAsset.bytes); return preferredPath; }
+        catch (Exception exception) { Debug.LogWarning("Không ghi được PDF chuyến hàng vào Documents: " + exception.Message); var fallback = Path.Combine(Application.persistentDataPath, fileName); WritePdf(fallback, pages, fontAsset.bytes); return fallback; }
+    }
+
     public static string Export(LoadingPlan plan)
     {
         if (!PlanValidation.TryValidate(plan, out var error)) throw new InvalidDataException(error);
@@ -94,6 +108,34 @@ public static class PdfExportSystem
         return pages;
     }
 
+    static List<StringBuilder> BuildShipmentPages(Shipment shipment)
+    {
+        ShipmentIntelligence.Normalize(shipment); var stats = ShipmentIntelligence.Statistics(shipment); var health = ShipmentIntelligence.Check(shipment);
+        var anchor = shipment.containers.FirstOrDefault() ?? new LoadingPlan { name = shipment.shipmentName };
+        var pages = new List<StringBuilder>(); var summary = NewPage("PHƯƠNG ÁN XẾP HÀNG - SHIPMENT SUMMARY", anchor);
+        Text(summary, 40, 720, 10, $"Chuyến hàng: {shipment.shipmentName}");
+        Text(summary, 40, 700, 9, $"Mã đơn: {shipment.orderReference}    Booking: {shipment.bookingReference}");
+        Text(summary, 40, 684, 9, $"Khách hàng: {shipment.customerName}    Điểm đến: {shipment.destination}    Ngày đóng: {shipment.loadingDate}");
+        Kpi(summary, 40, 610, 118, stats.ContainerCount.ToString(), "CONTAINER"); Kpi(summary, 170, 610, 118, stats.CargoTypeCount.ToString(), "LOẠI HÀNG"); Kpi(summary, 300, 610, 118, $"{stats.PlacedUnits}/{stats.TotalUnits}", "ĐÃ XẾP"); Kpi(summary, 430, 610, 125, $"{stats.CompletionPercent:0.#}%", "TIẾN ĐỘ");
+        Text(summary, 40, 580, 11, $"Tổng trọng lượng: {stats.TotalWeight:0.##} kg    Còn lại: {stats.RemainingUnits} kiện    Trạng thái: {health.StatusLabel}");
+        Text(summary, 40, 540, 12, "TỔNG HỢP CONTAINER"); float summaryY = 516;
+        foreach (var container in shipment.containers)
+        {
+            var cs = PlanIntelligence.Statistics(container); var state = PlanIntelligence.Check(container).IsValid ? "Hợp lệ" : "Cần kiểm tra";
+            foreach (var line in Wrap($"{ShipmentIntelligence.containerNumberOrName(container)} · {container.containerType} · {cs.PlacedQuantity} kiện · {cs.UtilizationPercent:0.#}% · {cs.PlacedWeight:0.##} kg · {state}", 94)) { Text(summary, 48, summaryY, 9, line); summaryY -= 15; }
+        }
+        pages.Add(summary);
+        var cargoPage = NewPage("SHIPMENT CARGO SUMMARY", anchor); float cargoY = 720; Text(cargoPage, 40, cargoY, 9, "Mã / Tên hàng · Bắt buộc · Đã xếp · Còn lại · Phân bổ theo container"); cargoY -= 24;
+        AddSectionRows(pages, ref cargoPage, ref cargoY, "TỔNG HỢP VÀ PHÂN BỔ", anchor, stats.Cargo.Select(item => $"{item.Type.code} / {item.Type.name} · {item.Required} · {item.Placed} · {item.Remaining} · " + string.Join(", ", item.Distribution.Select(d => $"{shipment.containers.Find(c => c.id == d.Key)?.containerNumber ?? d.Key.Substring(0, Math.Min(6, d.Key.Length))}: {d.Value}")))); pages.Add(cargoPage);
+        foreach (var container in shipment.containers)
+        {
+            var page = NewPage("CONTAINER - " + ShipmentIntelligence.containerNumberOrName(container), container); DrawViews(page, container); pages.Add(page);
+            var detail = NewPage("CARGO - " + ShipmentIntelligence.containerNumberOrName(container), container); float detailY = 720; var cs = PlanIntelligence.Statistics(container); Text(detail, 40, detailY, 10, $"Đã xếp {cs.PlacedQuantity} kiện · Sử dụng {cs.UtilizationPercent:0.#}% · {cs.PlacedWeight:0.##} kg"); detailY -= 25;
+            AddSectionRows(pages, ref detail, ref detailY, "CHI TIẾT CONTAINER", container, container.cargoTypes.Select(type => $"{type.code} / {type.name} · {container.placedCargo.Count(x => x.cargoTypeId == type.id)} kiện · màu #{ColorUtility.ToHtmlStringRGB(type.color)}")); pages.Add(detail);
+        }
+        return pages;
+    }
+
     static void Kpi(StringBuilder page,float x,float y,float width,string value,string label)
     {
         page.AppendFormat(CultureInfo.InvariantCulture,"0.95 0.97 0.99 rg {0} {1} {2} 58 re f 0.86 0.9 0.94 RG {0} {1} {2} 58 re S\n",x,y,width);
@@ -158,11 +200,25 @@ public static class PdfExportSystem
     static void DrawViews(StringBuilder stream, LoadingPlan plan)
     {
         var c = plan.container;
-        Text(stream,40,720,9,"MẶT TRÊN · CỘT/HÀNG");DrawGrid(stream,40,590,c.length,c.width,Mathf.Min(22f,500f/Mathf.Max(c.length,c.width)),0,plan);
+        Text(stream,395,720,9,"ISOMETRIC");DrawIsometric(stream,plan,455,625,Mathf.Min(8f,70f/Mathf.Max(c.length,c.width)));
+        Text(stream,40,720,9,"MẶT TRÊN · CỘT/HÀNG");DrawGrid(stream,40,590,c.length,c.width,Mathf.Min(22f,320f/Mathf.Max(c.length,c.width)),0,plan);
         Text(stream,40,550,9,"MẶT BÊN · CỘT/TẦNG");DrawGrid(stream,40,395,c.length,c.height,Mathf.Min(20f,500f/Mathf.Max(c.length,c.height)),1,plan);
         Text(stream,40,355,9,"MẶT TRƯỚC · HÀNG/TẦNG");DrawGrid(stream,40,210,c.width,c.height,Mathf.Min(22f,360f/Mathf.Max(c.width,c.height)),2,plan);
         DrawLegend(stream,plan,40,175,18);
     }
+
+    static void DrawIsometric(StringBuilder stream,LoadingPlan plan,float ox,float oy,float scale)
+    {
+        foreach(var box in plan.placedCargo.OrderBy(x=>x.position.z).ThenBy(x=>x.position.x+x.position.y))
+        {
+            var type=plan.cargoTypes.Find(x=>x.id==box.cargoTypeId);if(type==null)continue;
+            float x=box.position.x,y=box.position.y,z=box.position.z+box.size.z;
+            var a=Iso(ox,oy,scale,x,y,z);var b=Iso(ox,oy,scale,x+box.size.x,y,z);var c=Iso(ox,oy,scale,x+box.size.x,y+box.size.y,z);var d=Iso(ox,oy,scale,x,y+box.size.y,z);
+            stream.AppendFormat(CultureInfo.InvariantCulture,"{0:0.###} {1:0.###} {2:0.###} rg {3:0.##} {4:0.##} m {5:0.##} {6:0.##} l {7:0.##} {8:0.##} l {9:0.##} {10:0.##} l h f\n",type.color.r,type.color.g,type.color.b,a.x,a.y,b.x,b.y,c.x,c.y,d.x,d.y);
+        }
+        var cfg=plan.container;var corners=new[]{Iso(ox,oy,scale,0,0,0),Iso(ox,oy,scale,cfg.length,0,0),Iso(ox,oy,scale,cfg.length,cfg.width,0),Iso(ox,oy,scale,0,cfg.width,0),Iso(ox,oy,scale,0,0,cfg.height),Iso(ox,oy,scale,cfg.length,0,cfg.height),Iso(ox,oy,scale,cfg.length,cfg.width,cfg.height),Iso(ox,oy,scale,0,cfg.width,cfg.height)};int[,] edges={{0,1},{1,2},{2,3},{3,0},{4,5},{5,6},{6,7},{7,4},{0,4},{1,5},{2,6},{3,7}};stream.Append("0.25 0.45 0.7 RG 0.8 w\n");for(var i=0;i<edges.GetLength(0);i++){var a=corners[edges[i,0]];var b=corners[edges[i,1]];stream.AppendFormat(CultureInfo.InvariantCulture,"{0:0.##} {1:0.##} m {2:0.##} {3:0.##} l S\n",a.x,a.y,b.x,b.y);}
+    }
+    static Vector2 Iso(float ox,float oy,float scale,float x,float y,float z)=>new(ox+(x-y)*scale,oy+(x+y)*scale*.45f+z*scale);
 
     static void DrawLegend(StringBuilder stream,LoadingPlan plan,float x,float y,int maximum)
     {

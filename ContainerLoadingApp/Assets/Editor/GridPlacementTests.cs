@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Diagnostics;
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -118,7 +119,43 @@ public class GridPlacementTests
         var p=Plan();p.containerNumber="CONT-TEST-01";p.cargoTypes.Clear();for(var i=0;i<50;i++)p.cargoTypes.Add(new CargoType{id="T"+i,code="M"+i,name="Hàng thử nghiệm "+i,quantity=3,color=Color.HSVToRGB(i/50f,.7f,.9f)});PdfExportSystem.OutputDirectoryOverride=testRoot;var path=PdfExportSystem.Export(p);PdfExportSystem.OutputDirectoryOverride=null;StringAssert.StartsWith("LoadingPlan_ĐH-001_CONT-TEST-01_",System.IO.Path.GetFileName(path));Assert.Greater(new FileInfo(path).Length,100000);var text=Encoding.GetEncoding(28591).GetString(File.ReadAllBytes(path));Assert.GreaterOrEqual(Count(text,"/Type /Page "),4);
     }
 
+    [Test] public void ShipmentTracksQuantityAcrossThreeContainersAndRejectsOverflow()
+    {
+        var shipment = new Shipment { shipmentName = "SHIP-A", orderReference = "ORD-A", cargoTypes = new System.Collections.Generic.List<CargoType> { new CargoType { id = "A", code = "A", name = "A", length = 1, width = 1, height = 1, quantity = 100, color = Color.red }, new CargoType { id = "B", code = "B", name = "B", length = 1, width = 1, height = 1, quantity = 50, color = Color.green }, new CargoType { id = "C", code = "C", name = "C", length = 1, width = 1, height = 1, quantity = 25, color = Color.blue } } };
+        for (var i = 0; i < 3; i++) shipment.containers.Add(new LoadingPlan { id = "C" + i, name = "Container " + i, containerNumber = "CONT-" + i, container = new ContainerConfig { length = 10, width = 10, height = 2 }, cargoTypes = shipment.cargoTypes });
+        ShipmentIntelligence.Normalize(shipment); AddUnits(shipment.containers[0], "A", 40); AddUnits(shipment.containers[1], "A", 40); Assert.AreEqual(20, ShipmentIntelligence.Remaining(shipment, shipment.cargoTypes[0]));
+        AddUnits(shipment.containers[2], "A", 20); Assert.AreEqual(0, ShipmentIntelligence.Remaining(shipment, shipment.cargoTypes[0]));
+        Assert.IsFalse(ShipmentIntelligence.TryPlace(shipment, shipment.containers[2], shipment.cargoTypes[0], new Vector3Int(0, 0, 1), 0, null, out var error)); StringAssert.Contains("đủ", error);
+        AddUnits(shipment.containers[0], "B", 20); AddUnits(shipment.containers[1], "B", 20); AddUnits(shipment.containers[2], "B", 10); AddUnits(shipment.containers[0], "C", 10); AddUnits(shipment.containers[1], "C", 10); AddUnits(shipment.containers[2], "C", 5);var stats=ShipmentIntelligence.Statistics(shipment);Assert.AreEqual(175,stats.TotalUnits);Assert.AreEqual(175,stats.PlacedUnits);Assert.AreEqual(0,stats.RemainingUnits);
+    }
+
+    [Test] public void RemovingPlacementReturnsShipmentRemainingQuantity()
+    {
+        var shipment = ShipmentIntelligence.FromV2Plan(Plan()); shipment.cargoTypes[0].quantity = 100; AddUnits(shipment.containers[0], "A", 40); var other = new LoadingPlan { id = "C2", container = new ContainerConfig { length = 10, width = 10, height = 2 }, cargoTypes = shipment.cargoTypes }; shipment.containers.Add(other); AddUnits(other, "A", 40); Assert.AreEqual(20, ShipmentIntelligence.Statistics(shipment).RemainingUnits); other.placedCargo.RemoveRange(0, 10); Assert.AreEqual(30, ShipmentIntelligence.Statistics(shipment).RemainingUnits);
+    }
+
+    [Test] public void ShipmentSaveLoadPreservesContainerRelationshipsAndPdf()
+    {
+        var shipment = ShipmentIntelligence.FromV2Plan(Plan()); shipment.shipmentName = "SHIP-PDF"; shipment.containers.Add(new LoadingPlan { id = "C2", shipmentId = shipment.id, containerNumber = "CONT-2", container = new ContainerConfig { length = 10, width = 3, height = 6 }, cargoTypes = shipment.cargoTypes }); AddUnits(shipment.containers[0], "A", 2); var path = ShipmentPersistence.Save(shipment); var loaded = ShipmentPersistence.Load(path); Assert.AreEqual(2, loaded.containers.Count); Assert.AreEqual(shipment.id, loaded.containers[1].shipmentId); PdfExportSystem.OutputDirectoryOverride = testRoot; var pdf = PdfExportSystem.Export(loaded); PdfExportSystem.OutputDirectoryOverride = null; Assert.IsTrue(File.Exists(pdf)); Assert.Greater(new FileInfo(pdf).Length, 1000);
+    }
+
+    [Test] public void DuplicateAndDeleteContainerRespectGlobalQuantity()
+    {
+        var shipment=ShipmentIntelligence.FromV2Plan(Plan());shipment.cargoTypes[0].quantity=3;AddUnits(shipment.containers[0],"A",2);var copy=ShipmentIntelligence.DuplicateContainer(shipment,shipment.containers[0],true,out var copied);Assert.IsFalse(copied);Assert.AreEqual(0,copy.placedCargo.Count);AddUnits(copy,"A",1);Assert.AreEqual(0,ShipmentIntelligence.Remaining(shipment,shipment.cargoTypes[0]));Assert.IsTrue(ShipmentIntelligence.DeleteContainer(shipment,copy));Assert.AreEqual(1,ShipmentIntelligence.Remaining(shipment,shipment.cargoTypes[0]));
+    }
+
+    [Test] public void V2MigrationIsIdempotentAndKeepsSourcePlan()
+    {
+        var source=PlanPersistence.Save(Plan());Assert.IsTrue(File.Exists(source));var first=ShipmentPersistence.ListValid(out var invalid);Assert.AreEqual(0,invalid.Length);Assert.AreEqual(1,first.Count);var second=ShipmentPersistence.ListValid(out invalid);Assert.AreEqual(1,second.Count);Assert.IsTrue(File.Exists(source));Assert.AreEqual(Shipment.CurrentSchemaVersion,second[0].schemaVersion);Assert.AreEqual(1,second[0].containers.Count);
+    }
+
+    [Test] public void ShipmentBackupRestoreKeepsCargoContainersAndPlacements()
+    {
+        var shipment=ShipmentIntelligence.FromV2Plan(Plan());AddUnits(shipment.containers[0],"A",2);shipment.containers.Add(new LoadingPlan{id="SECOND",shipmentId=shipment.id,name="Container 02",containerNumber="CONT-02",container=new ContainerConfig{length=10,width=3,height=6},cargoTypes=shipment.cargoTypes});ShipmentPersistence.Save(shipment);var backupPath=ShipmentPersistence.ExportBackup();Assert.IsTrue(ShipmentPersistence.TryReadBackup(backupPath,out var backup,out var error),error);Assert.AreEqual(1,backup.shipments.Count);Assert.AreEqual(1,ShipmentPersistence.RestoreBackup(backup));var all=ShipmentPersistence.ListValid(out _);Assert.AreEqual(2,all.Count);Assert.IsTrue(all.All(x=>x.containers.Count==2&&x.cargoTypes.Count==1));
+    }
+
     static PlacedCargo Box(string id,Vector3Int position)=>new(){id=id,cargoTypeId="A",position=position,size=new Vector3Int(2,2,2),rotation=0};
+    static void AddUnits(LoadingPlan plan, string typeId, int count) { var type=plan.cargoTypes.Find(x=>x.id==typeId);var size=new Vector3Int(type.length,type.width,type.height);var columns=Math.Max(1,plan.container.length/size.x);var rows=Math.Max(1,plan.container.width/size.y);for (var i = 0; i < count; i++) plan.placedCargo.Add(new PlacedCargo { id = Guid.NewGuid().ToString("N"), cargoTypeId = typeId, position = new Vector3Int((i%columns)*size.x,((i/columns)%rows)*size.y,(i/(columns*rows))*size.z), size = size, rotation = 0 }); }
     static string Utf16Hex(string value){var bytes=Encoding.BigEndianUnicode.GetBytes(value);var result=new StringBuilder();foreach(var b in bytes)result.Append(b.ToString("X2"));return result.ToString();}
     static int Count(string value,string token){int count=0,index=0;while((index=value.IndexOf(token,index,StringComparison.Ordinal))>=0){count++;index+=token.Length;}return count;}
 }

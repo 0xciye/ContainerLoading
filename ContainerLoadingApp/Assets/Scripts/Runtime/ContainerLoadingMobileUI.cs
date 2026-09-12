@@ -321,6 +321,7 @@ public sealed partial class ContainerLoadingApp
 
     void BuildMobileHome()
     {
+        if (BuildMobileShipmentHome()) return;
         var content = BuildPage("Container Loading", "Điều phối phương án xếp hàng", true);
         StatusBanner(content, status);
         SectionHeader(content, "Phương án gần đây", "Tìm và tiếp tục công việc đang thực hiện");
@@ -391,6 +392,7 @@ public sealed partial class ContainerLoadingApp
 
     void BuildMobileDetail()
     {
+        if (BuildMobileShipmentDetail()) return;
         var content = BuildPage(plan.name, plan.container.name + $"  •  {plan.container.length} × {plan.container.width} × {plan.container.height}", false, OpenHome);
         StatusBanner(content, status);
         var used = UsedVolume(plan); var capacity = Mathf.Max(1, plan.container.length * plan.container.width * plan.container.height); var percent = Mathf.Clamp(Mathf.RoundToInt(used * 100f / capacity), 0, 100);
@@ -433,7 +435,7 @@ public sealed partial class ContainerLoadingApp
         {
             var item = Vertical(content, "CargoCard", UiSurface, 7, 22); item.gameObject.AddComponent<LayoutElement>().preferredHeight = 310;
             var heading = Horizontal(item, "CargoHeading", 12); var cargoSwatch = Surface(heading, "CargoColor", type.color); cargoSwatch.gameObject.AddComponent<LayoutElement>().preferredWidth = 28; MobileText(heading, type.code + "  ·  " + type.name, 30, UiText, FontStyle.Bold);
-            var placed=plan.placedCargo.Count(x=>x.cargoTypeId==type.id);MobileText(item, $"{type.length} × {type.width} × {type.height} ô   ·   Đã xếp {placed}/{type.quantity}   ·   Còn {Mathf.Max(0,type.quantity-placed)}", 23, UiMuted);
+            var placed=shipment.containers.Sum(c=>c.placedCargo.Count(x=>x.cargoTypeId==type.id));MobileText(item, $"{type.length} × {type.width} × {type.height} ô   ·   Toàn chuyến {placed}/{type.quantity}   ·   Còn {ShipmentIntelligence.Remaining(shipment,type)}", 23, UiMuted);
             MobileText(item,$"{type.weightPerUnit:0.##} kg/kiện   ·   {(type.allowRotation?"Được xoay":"Giữ nguyên hướng")}   ·   {(type.stackable?"Được xếp chồng":"Không xếp chồng")}",21,UiMuted);
             var row = Horizontal(item, "CargoActions"); MobileButton(row, "Sửa", () => { EditCargo(type); RefreshMobileUI(); }); MobileButton(row, "Xóa", () => RequestMobileCargoDelete(type), false, true);
         }
@@ -484,7 +486,7 @@ public sealed partial class ContainerLoadingApp
         var editorSearch=Horizontal(content,"EditorCargoSearch",10);var editorSearchField=MobileInput(editorSearch,"",cargoSearch,v=>cargoSearch=v,"Tìm hàng...");editorSearchField.onEndEdit.AddListener(_=>RefreshMobileUI(true));MobileButton(editorSearch,"Tìm",()=>RefreshMobileUI(true),true);
         var editorFilters=Horizontal(content,"EditorCargoFilters",8);MobileButton(editorFilters,"Tất cả",()=>{cargoFilter=CargoFilter.All;RefreshMobileUI(true);},cargoFilter==CargoFilter.All);MobileButton(editorFilters,"Còn lại",()=>{cargoFilter=CargoFilter.Remaining;RefreshMobileUI(true);},cargoFilter==CargoFilter.Remaining);MobileButton(editorFilters,"Đã đủ",()=>{cargoFilter=CargoFilter.Complete;RefreshMobileUI(true);},cargoFilter==CargoFilter.Complete);
         if(plan.cargoTypes.Count==0)StatusBanner(content,"Chưa có loại hàng để xếp.");
-        for (var i = 0; i < plan.cargoTypes.Count; i++) { var index = i; var type = plan.cargoTypes[i];if(!CargoMatchesFilter(type)||(cargoSearch.Length>0&&(type.code??"").IndexOf(cargoSearch,StringComparison.OrdinalIgnoreCase)<0&&(type.name??"").IndexOf(cargoSearch,StringComparison.OrdinalIgnoreCase)<0))continue;var placed=plan.placedCargo.Count(x=>x.cargoTypeId==type.id);var button=MobileButton(content, type.code + "  ·  " + type.name + "   " + type.length + "×" + type.width + "×" + type.height + $"   ·   {placed}/{type.quantity} · Còn {Mathf.Max(0,type.quantity-placed)}", () => BeginPlacement(index), placementMode && i == selectedType);button.interactable=placed<type.quantity; }
+        for (var i = 0; i < plan.cargoTypes.Count; i++) { var index = i; var type = plan.cargoTypes[i];if(!CargoMatchesFilter(type)||(cargoSearch.Length>0&&(type.code??"").IndexOf(cargoSearch,StringComparison.OrdinalIgnoreCase)<0&&(type.name??"").IndexOf(cargoSearch,StringComparison.OrdinalIgnoreCase)<0))continue;var placed=shipment.containers.Sum(c=>c.placedCargo.Count(x=>x.cargoTypeId==type.id));var remaining=ShipmentIntelligence.Remaining(shipment,type);var button=MobileButton(content, type.code + "  ·  " + type.name + "   " + type.length + "×" + type.width + "×" + type.height + $"   ·   Toàn chuyến {placed}/{type.quantity} · Còn {remaining}", () => BeginPlacement(index), placementMode && i == selectedType);button.interactable=remaining>0; }
         var layerRow = Horizontal(content, "Layer"); MobileButton(layerRow, "Hạ tầng", () => { layer = Mathf.Max(0, layer - 1); if (placementMode) { previewPosition.z = layer; SetPreview(previewPosition, false); } else RefreshMobileUI(true); }); MobileText(layerRow, "Tầng đáy " + (layer + 1) + "/" + plan.container.height, 27, UiText, FontStyle.Bold, TextAnchor.MiddleCenter); MobileButton(layerRow, "Nâng tầng", () => { layer = Mathf.Min(plan.container.height - 1, layer + 1); if (placementMode) { previewPosition.z = layer; SetPreview(previewPosition, false); } else RefreshMobileUI(true); });
         if (plan.cargoTypes.Count > 0)
         {
@@ -492,7 +494,7 @@ public sealed partial class ContainerLoadingApp
             var position = Vertical(content, "PositionController", UiPrimarySoft, 8, 24);
             MobileText(position, placementMode ? "Vị trí xem trước" : "Chọn loại hàng để bắt đầu xếp", 26, UiPrimary, FontStyle.Bold);
             MobileText(position, type.code + "  •  Kích thước " + type.length + " × " + type.width + " × " + type.height + " ô", 24, UiText);
-            MobileText(position,$"Đã xếp {plan.placedCargo.Count(x=>x.cargoTypeId==type.id)}/{type.quantity} · Còn {Mathf.Max(0,type.quantity-plan.placedCargo.Count(x=>x.cargoTypeId==type.id))}",23,UiMuted,FontStyle.Bold);
+            MobileText(position,$"Toàn chuyến đã xếp {shipment.containers.Sum(c=>c.placedCargo.Count(x=>x.cargoTypeId==type.id))}/{type.quantity} · Còn {ShipmentIntelligence.Remaining(shipment,type)}",23,UiMuted,FontStyle.Bold);
             var assist=Horizontal(position,"AssistedPlacement",10);var rotatePreview=MobileButton(assist,"XOAY 90°",RotateSelected);rotatePreview.interactable=type.allowRotation;MobileButton(assist,"ĐỀ XUẤT VỊ TRÍ",SuggestPlacement);MobileButton(assist,"XẾP HẾT CÒN LẠI",()=>Confirm("Xem trước xếp tự động?","Ứng dụng sẽ thử xếp tất cả hàng còn lại theo thứ tự ổn định. Bạn được xem trước rồi mới chấp nhận.",PreviewAutoFill,"Xem trước","Hủy"),true);
             var previewSize = GridPlacement.RotatedSize(new Vector3Int(type.length, type.width, type.height), rotation);
             MobileText(position, previewSize.z > 1 ? $"Chiếm tầng {previewPosition.z + 1}–{previewPosition.z + previewSize.z}" : $"Chiếm tầng {previewPosition.z + 1}", 23, UiMuted, FontStyle.Bold, TextAnchor.MiddleCenter);
@@ -529,7 +531,7 @@ public sealed partial class ContainerLoadingApp
         var about = Vertical(content, "About", UiSurface, 8, 24); MobileText(about, "Container Loading", 29, UiText, FontStyle.Bold); MobileText(about, "Phiên bản " + Application.version + "\nCông cụ lập phương án xếp container chuyên nghiệp.", 22, UiMuted);
     }
 
-    bool CargoMatchesFilter(CargoType type){var placed=plan.placedCargo.Count(x=>x.cargoTypeId==type.id);return cargoFilter==CargoFilter.All||cargoFilter==CargoFilter.Remaining&&placed<type.quantity||cargoFilter==CargoFilter.Complete&&placed>=type.quantity;}
+    bool CargoMatchesFilter(CargoType type){var placed=shipment.containers.Sum(c=>c.placedCargo.Count(x=>x.cargoTypeId==type.id));return cargoFilter==CargoFilter.All||cargoFilter==CargoFilter.Remaining&&placed<type.quantity||cargoFilter==CargoFilter.Complete&&placed>=type.quantity;}
 
     void ShowAutoFillPreview(int count)
     {

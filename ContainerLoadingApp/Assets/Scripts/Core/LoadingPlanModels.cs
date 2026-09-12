@@ -21,6 +21,8 @@ public class PlacedCargo { public string id, cargoTypeId; public Vector3Int posi
 public class LoadingPlan
 {
     public const int CurrentSchemaVersion = 2;
+    public string id = Guid.NewGuid().ToString("N");
+    public string shipmentId = "";
     public int schemaVersion = CurrentSchemaVersion;
     public string name = "LoadingPlan";
     public string orderReference = "";
@@ -30,6 +32,8 @@ public class LoadingPlan
     public string destination = "";
     public string loadingDate = "";
     public string orderNotes = "";
+    public string notes = "";
+    public string containerType = "";
     public ContainerConfig container = new();
     public List<CargoType> cargoTypes = new();
     public List<PlacedCargo> placedCargo = new();
