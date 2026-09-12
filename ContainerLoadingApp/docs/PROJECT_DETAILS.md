@@ -16,6 +16,8 @@ UI runtime dùng Unity uGUI (`Canvas`, `CanvasScaler`, `ScrollRect`, `RectMask2D
 - Cargo Types: thêm, sửa, xóa loại thùng với kích thước do người dùng nhập.
 - 3D Editor: touch hoặc bảng nút điều hướng, preview viền trắng, đặt/chọn/xoay/di chuyển/xóa, đổi tầng, camera, auto-place transaction, undo/redo và autosave.
 - Settings: chỉ hiển thị cấu hình/khả năng thực sự có trong ứng dụng.
+- Shipment Detail V4: tạo/hủy optimization, so sánh tối đa 3 candidate, giải thích recommendation, áp dụng có snapshot và khôi phục.
+- 3D Editor V4: khóa/mở khóa placement, hiển thị phía cửa và duyệt từng bước loading sequence.
 
 ## Navigation
 
@@ -23,7 +25,7 @@ Bottom navigation chuyển thật giữa Home và Settings. Màn hình con có n
 
 ## Container Management
 
-Home đọc Shipment schema 3 trong thư mục `Shipments` và hiển thị mỗi chuyến hàng thành một card tổng hợp. Shipment Detail là hub KPI và danh sách container; editor vẫn mở độc lập theo từng container nhưng cargo remaining luôn lấy từ toàn Shipment.
+Home đọc Shipment schema 4 trong thư mục `Shipments` và hiển thị mỗi chuyến hàng thành một card tổng hợp. Shipment Detail là hub KPI, scenario comparison và danh sách container; editor vẫn mở độc lập theo từng container nhưng cargo remaining luôn lấy từ toàn Shipment.
 
 ## Create/Edit/Delete Workflow
 
@@ -31,7 +33,7 @@ Create kiểm tra mã bắt buộc và ba kích thước nguyên dương trướ
 
 ## Data Persistence
 
-`ShipmentPersistence` lưu toàn bộ metadata, cargo, container và placement trong một JSON schema 3 dưới `Application.persistentDataPath/Shipments`. Save dùng file tạm + replace; backup/import bảo toàn quan hệ. Nếu chỉ có dữ liệu V2 trong `Plans`, migration tạo Shipment tương ứng mà không xóa source và không lặp lại khi chạy sau.
+`ShipmentPersistence` lưu metadata, cargo, container, placement, scenario, lock, sequence, settings và history trong JSON schema 4 dưới `Application.persistentDataPath/Shipments`. Save dùng file tạm + replace; backup/import bảo toàn quan hệ. Schema 3 được normalize lên 4 khi đọc; nếu chỉ có dữ liệu V2 trong `Plans`, migration vẫn tạo Shipment tương ứng mà không xóa source.
 
 ## Design System
 
@@ -49,9 +51,9 @@ Chưa có dark mode trong model/cấu hình hiện tại. Không hiển thị c�
 
 Trường kích thước dùng numeric keyboard; text field dùng keyboard chuẩn. Android Back tuân theo cấp màn hình. Splash Unity bị tắt, launcher dùng icon riêng. PDF được mở/chia sẻ qua Android content provider với quyền đọc tạm thời.
 
-## V3 reliability và testing
+## V4 reliability và testing
 
-47/47 EditMode tests đạt, gồm placement nhiều tầng, bounds/collision, quota xuyên 3 container, remove/delete/duplicate, migration V2, Shipment persistence/backup, auto-fill, 500 placements, update parsing và PDF. QA report production tạo Shipment A=100/B=50/C=25 phân bổ đủ trên 3 container; PDF 8 trang đã render và kiểm tra trực quan. APK V3.1 đã cài/mở qua LDPlayer CLI; ADB của instance vẫn báo `offline`, nên không thể ghi nhận thao tác UI tự động bằng bridge.
+56 EditMode tests bao gồm toàn bộ regression V3.1 và optimizer/scenario/lock/loading sequence/weight/migration V3. Full workflow dùng 5 container, 12 loại, 240 kiện rồi generate, compare, apply, save, reload, backup và export PDF. Optimizer chạy theo time budget trên background task, hỗ trợ cancellation và không autosave giữa vòng lặp.
 
 ## Known Limitations
 
@@ -59,13 +61,14 @@ Trường kích thước dùng numeric keyboard; text field dùng keyboard chu�
 - Status được derive từ validation/statistics (`Chưa hoàn tất`, `Cần kiểm tra`, `Sẵn sàng`), không lưu một trạng thái có thể lệch dữ liệu.
 - Storage là JSON cục bộ và được đọc đồng bộ, phù hợp quy mô dữ liệu hiện tại nhưng chưa tối ưu cho hàng nghìn phương án.
 - PDF open/share phụ thuộc ứng dụng nhận intent có sẵn trên thiết bị. CI cần Unity license secrets trước khi workflow có thể build trên GitHub-hosted runner.
+- Grid là đơn vị tương đối, không phải mm/cm; weight distribution là planning indicator, không phải chứng nhận an toàn/pháp lý.
+- Loading path dùng dependency hình học theo trục cửa X=0 và support; chưa mô phỏng forklift hoặc kích thước cửa thực.
+- Heuristic trả về `Optimized Candidate`/`Recommended Plan`, không chứng minh nghiệm tối ưu toàn cục.
 
-## Future Improvements
+## Deferred P2
 
-- Thêm theme persistence và dark palette hoàn chỉnh.
-- Thêm trạng thái nghiệp vụ chính thức vào model rồi triển khai filter.
-- Chuyển danh sách lớn sang virtualized list và repository bất đồng bộ.
-- Thêm PlayMode UI tests và tự động cuộn chính xác tới field đang focus khi dùng bàn phím mềm trên nhiều thiết bị hơn.
+- Heatmap shader, animation loading vật lý, rule scripting và mô phỏng forklift bị chủ động hoãn vì không cần cho quyết định P0 và chưa có dữ liệu vật lý đủ tin cậy.
+- PlayMode UI automation trên thiết bị cần ADB ổn định; domain, persistence, PDF và Android package vẫn được kiểm tra độc lập.
 
 ## 3D Container Loading
 

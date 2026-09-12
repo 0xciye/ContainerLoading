@@ -40,8 +40,8 @@ jobs:
       - name: Calculate version
         shell: bash
         run: |
-          echo "VERSION_NAME=3.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
-          echo "VERSION_CODE=$((300000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          echo "VERSION_NAME=4.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$((400000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
 
       - name: Build signed APK
         uses: game-ci/unity-builder@v4

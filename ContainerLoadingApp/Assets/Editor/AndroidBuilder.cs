@@ -14,8 +14,8 @@ public static class AndroidBuilder
         var directory = Path.GetDirectoryName(output);
         if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
         PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android, "com.ciye.containerloading");
-        PlayerSettings.bundleVersion = CommandLineValue("-versionName") ?? "3.1.0";
-        PlayerSettings.Android.bundleVersionCode = int.TryParse(CommandLineValue("-versionCode"), out var versionCode) ? versionCode : 5;
+        PlayerSettings.bundleVersion = CommandLineValue("-versionName") ?? "4.0.0";
+        PlayerSettings.Android.bundleVersionCode = int.TryParse(CommandLineValue("-versionCode"), out var versionCode) ? versionCode : 6;
         PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel26;
         PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
         PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;

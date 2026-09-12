@@ -2,7 +2,18 @@
 
 Ứng dụng Unity 6 chạy trên Android để lập, kiểm tra và báo cáo phương án xếp container trên lưới 3D.
 
-## Version 3
+## Version 4
+
+- Tạo tối đa 3 `Optimized Candidate` bằng heuristic deterministic: ưu tiên tiết kiệm container, cân bằng tải hoặc dễ đóng hàng; không tuyên bố nghiệm tối ưu tuyệt đối.
+- So sánh candidate theo completion, số container, utilization trung bình/thấp nhất, trọng lượng, cảnh báo và tính khả thi của trình tự; recommendation có giải thích rule-based.
+- Áp dụng candidate theo transaction: luôn tạo snapshot khôi phục trước, không ghi đè âm thầm sơ đồ thủ công.
+- Placement có thể khóa; optimizer giữ nguyên kiện đã khóa và xử lý phần còn lại.
+- Cửa container được quy ước tại `X=0`/Cột 1; dependency graph tạo thứ tự đóng hàng từ sâu ra cửa và từ dưới lên trên, có Previous/Next để highlight kiện trên 3D.
+- Tính chỉ báo phân bố tải trái/phải, cửa/cuối và center-of-mass tương đối; chỉ phục vụ lập kế hoạch, không phải chứng nhận an toàn.
+- PDF cấp Shipment có executive recommendation, bảng so sánh scenario, weight indicator và hướng dẫn đóng hàng theo nhóm.
+- Shipment schema 4 đọc trực tiếp dữ liệu schema 3; backup giữ scenario, lock, sequence, settings và lịch sử nhẹ.
+
+### Baseline V3 được bảo toàn
 
 - Home Dashboard hiển thị chuyến hàng thay vì từng container rời; một Shipment chứa danh mục cargo dùng chung và nhiều Container Plan.
 - Shipment Detail tổng hợp container, tổng/đã xếp/còn lại, tiến độ, trọng lượng và card trạng thái của từng container.
@@ -31,13 +42,13 @@ Placement dùng grid cell làm source of truth. Khi di chuyển hoặc đặt h�
 
 Trong Unity Hub, mở project bằng Unity `6000.5.10f1`, mở `Assets/Scenes/SampleScene.unity` và nhấn Play.
 
-APK ARM64 V3.1 đã ký release tại `Builds/Android/ContainerLoadingApp-v3.1.0.apk`. Yêu cầu Android 8.0 (API 26) trở lên. Xem hướng dẫn tại `docs/ANDROID_BUILD.md`.
+APK ARM64 V4.0 đã ký release tại `Builds/Android/ContainerLoadingApp-v4.0.0.apk`. Yêu cầu Android 8.0 (API 26) trở lên. Xem hướng dẫn tại `docs/ANDROID_BUILD.md`.
 
-47 EditMode tests bao phủ placement, global quantity nhiều container, migration V2, backup Shipment, duplicate/delete container, auto-fill, validation, 500 placements, update parsing và PDF Unicode nhiều trang. Kiến trúc và giới hạn hiện tại được ghi tại `docs/PROJECT_DETAILS.md`.
+56 EditMode tests bao phủ thêm optimizer, determinism, scenario apply/restore, lock, loading sequence, reason code, weight/CoM, migration V3 và workflow 5 container/240 kiện qua save–restart–backup–PDF. Kiến trúc và giới hạn hiện tại được ghi tại `docs/PROJECT_DETAILS.md`.
 
 ## Dữ liệu
 
-Shipment schema 3 được lưu nguyên tử trong vùng dữ liệu ứng dụng; quan hệ Cargo–Container–Placement được giữ nguyên khi backup/import. Plan V2 được migrate idempotent thành một Shipment có một container và file nguồn không bị xóa. PDF ưu tiên thư mục `Documents` công khai trên Android và tự fallback về vùng ứng dụng nếu thiết bị từ chối quyền ghi.
+Shipment schema 4 được lưu nguyên tử trong vùng dữ liệu ứng dụng; quan hệ Cargo–Container–Placement–Scenario được giữ nguyên khi backup/import. Shipment V3 và Plan V2 được migrate idempotent, file nguồn không bị xóa. PDF ưu tiên thư mục `Documents` công khai trên Android và tự fallback về vùng ứng dụng nếu thiết bị từ chối quyền ghi.
 
 ## Nhận diện
 

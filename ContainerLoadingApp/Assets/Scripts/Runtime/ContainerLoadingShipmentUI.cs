@@ -28,10 +28,31 @@ public sealed partial class ContainerLoadingApp
         var stats = ShipmentIntelligence.Statistics(shipment); var content = BuildPage(string.IsNullOrWhiteSpace(shipment.orderReference) ? shipment.shipmentName : shipment.orderReference, "Shipment / Chuyến hàng", false, OpenHome); StatusBanner(content, status);
         var summary = Horizontal(content, "ShipmentSummary", 10); StatCard(summary, stats.ContainerCount.ToString(), "Container"); StatCard(summary, stats.TotalUnits.ToString(), "Tổng kiện"); StatCard(summary, stats.PlacedUnits.ToString(), "Đã xếp"); StatCard(summary, stats.RemainingUnits.ToString(), "Còn lại");
         var info = Vertical(content, "ShipmentInfo", UiSurface, 8, 20); MobileText(info, "Khách hàng: " + (string.IsNullOrWhiteSpace(shipment.customerName) ? "Chưa có" : shipment.customerName), 23, UiText); MobileText(info, "Điểm đến: " + (string.IsNullOrWhiteSpace(shipment.destination) ? "Chưa có" : shipment.destination), 23, UiText); MobileText(info, $"Tiến độ: {stats.CompletionPercent:0.#}% · Trọng lượng: {stats.TotalWeight:0.##} kg", 23, UiText, FontStyle.Bold); ProgressBar(info, stats.TotalUnits == 0 ? 0 : stats.PlacedUnits / (float)stats.TotalUnits);
+        SectionHeader(content, "PHƯƠNG ÁN ĐỀ XUẤT", "So sánh theo hoàn thành, số container, cảnh báo, cân bằng tải và utilization");
+        if (optimizationRunning)
+        {
+            var running = Vertical(content, "OptimizationRunning", UiPrimarySoft, 8, 22); MobileText(running, "Đang tính phương án…", 27, UiPrimary, FontStyle.Bold); MobileText(running, "Sơ đồ hiện tại không bị thay đổi. Tiến trình không hiển thị phần trăm giả.", 22, UiMuted); MobileButton(running, "HỦY", CancelOptimization, false, true);
+        }
+        else
+        {
+            var optimize = MobileButton(content, "TẠO PHƯƠNG ÁN ĐỀ XUẤT", GenerateSuggestedScenarios, true); optimize.interactable = shipment.cargoTypes.Count > 0 && shipment.containers.Count > 0;
+            if (!string.IsNullOrWhiteSpace(shipment.restoreScenarioId)) MobileButton(content, "KHÔI PHỤC BẢN XẾP TRƯỚC KHI ÁP DỤNG", RestoreBeforeScenario);
+        }
+        foreach (var scenario in shipment.scenarios.Where(x => !x.workingSnapshot))
+        {
+            var m = scenario.metrics; var card = Vertical(content, "ScenarioCard", scenario.recommended ? UiPrimarySoft : UiSurface, 8, 20);
+            MobileText(card, scenario.name + (scenario.recommended ? "  ·  ĐỀ XUẤT" : ""), 29, scenario.recommended ? UiPrimary : UiText, FontStyle.Bold);
+            MobileText(card, scenario.strategy, 22, UiMuted, FontStyle.Bold);
+            MobileText(card, $"{m.containerCount} container · {m.placed}/{m.totalCargo} kiện · {m.completionPercent:0.#}% hoàn thành", 23, UiText);
+            MobileText(card, $"Sử dụng TB {m.averageUtilization:0.#}% · thấp nhất {m.minimumUtilization:0.#}% · tải {m.weightBalance}", 22, UiMuted);
+            MobileText(card, $"Trình tự: {m.loadingFeasibility} · {m.loadingSteps} bước · {m.warnings} cảnh báo", 22, m.warnings == 0 ? UiSuccess : UiWarning);
+            if (scenario.recommended) MobileText(card, scenario.explanation, 22, UiText);
+            MobileButton(card, "ÁP DỤNG PHƯƠNG ÁN", () => ApplyScenario(scenario), scenario.recommended);
+        }
         SectionHeader(content, "CONTAINERS", "Mỗi container có sơ đồ, utilization và validation riêng");
         foreach (var container in shipment.containers)
         {
-            var cs = PlanIntelligence.Statistics(container); var card = Vertical(content, "ContainerCard", UiSurface, 8, 18); MobileText(card, ShipmentIntelligence.containerNumberOrName(container), 28, UiText, FontStyle.Bold); MobileText(card, $"{container.containerType} · {container.container?.length} × {container.container?.width} × {container.container?.height} · {cs.PlacedQuantity} kiện · {cs.UtilizationPercent:0.#}% · {cs.PlacedWeight:0.##} kg", 23, UiMuted); var row = Horizontal(card, "ContainerActions"); MobileButton(row, "MỞ SƠ ĐỒ", () => OpenShipmentContainer(container), true); MobileButton(row, "PDF", () => ExportContainerPdf(container)); var more = Horizontal(card, "ContainerMore"); MobileButton(more, "NHÂN BẢN CẤU HÌNH", () => DuplicateShipmentContainer(container, false)); MobileButton(more, "NHÂN BẢN KÈM HÀNG", () => DuplicateShipmentContainer(container, true)); MobileButton(more, "XÓA", () => RequestDeleteShipmentContainer(container), false, true);
+            var cs = PlanIntelligence.Statistics(container); var wd = WeightDistributionCalculator.Calculate(container); var card = Vertical(content, "ContainerCard", UiSurface, 8, 18); MobileText(card, ShipmentIntelligence.containerNumberOrName(container), 28, UiText, FontStyle.Bold); MobileText(card, $"{container.containerType} · {container.container?.length} × {container.container?.width} × {container.container?.height} · {cs.PlacedQuantity} kiện · {cs.UtilizationPercent:0.#}% · {cs.PlacedWeight:0.##} kg", 23, UiMuted); if(wd.totalWeight>0)MobileText(card,$"Tải: trái {wd.leftPercent:0.#}% / phải {wd.rightPercent:0.#}% · cửa {wd.frontPercent:0.#}% / cuối {wd.rearPercent:0.#}% · {wd.classification}",21,UiMuted);var row = Horizontal(card, "ContainerActions"); MobileButton(row, "MỞ SƠ ĐỒ", () => OpenShipmentContainer(container), true); MobileButton(row, "PDF", () => ExportContainerPdf(container)); var more = Horizontal(card, "ContainerMore"); MobileButton(more, "NHÂN BẢN CẤU HÌNH", () => DuplicateShipmentContainer(container, false)); MobileButton(more, "NHÂN BẢN KÈM HÀNG", () => DuplicateShipmentContainer(container, true)); MobileButton(more, "XÓA", () => RequestDeleteShipmentContainer(container), false, true);
         }
         MobileButton(content, "+ THÊM CONTAINER", AddShipmentContainer, true); var reports = Horizontal(content, "Reports"); MobileButton(reports, "XUẤT PDF TOÀN CHUYẾN", ExportPdf, true); MobileButton(reports, "SAO LƯU", ExportPlanData);
         return true;

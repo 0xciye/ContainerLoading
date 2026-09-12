@@ -90,7 +90,7 @@ public static class ShipmentPersistence
         {
             if (!File.Exists(path) || new FileInfo(path).Length > MaxImportBytes) { error = "Tệp bản sao lưu không hợp lệ."; return false; }
             document = JsonUtility.FromJson<ShipmentBackupDocument>(File.ReadAllText(path, Encoding.UTF8));
-            if (document == null || document.schemaVersion != Shipment.CurrentSchemaVersion || document.shipments == null) { error = "Bản sao lưu không đúng schema chuyến hàng."; document = null; return false; }
+            if (document == null || document.schemaVersion <= 0 || document.schemaVersion > Shipment.CurrentSchemaVersion || document.shipments == null) { error = "Bản sao lưu không đúng schema chuyến hàng."; document = null; return false; }
             foreach (var shipment in document.shipments) if (!TryValidate(shipment, out error)) { document = null; return false; }
             return true;
         }

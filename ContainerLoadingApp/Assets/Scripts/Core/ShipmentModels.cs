@@ -6,7 +6,7 @@ using UnityEngine;
 [Serializable]
 public sealed class Shipment
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
     public int schemaVersion = CurrentSchemaVersion;
     public string id = Guid.NewGuid().ToString("N");
     public string shipmentName = "Chuyến hàng mới";
@@ -20,6 +20,11 @@ public sealed class Shipment
     public string updatedAt = DateTime.UtcNow.ToString("O");
     public List<CargoType> cargoTypes = new();
     public List<LoadingPlan> containers = new();
+    public List<OptimizationScenario> scenarios = new();
+    public string selectedScenarioId = "";
+    public string restoreScenarioId = "";
+    public OptimizationSettings optimizationSettings = new();
+    public List<ShipmentChange> history = new();
 }
 
 public sealed class ShipmentCargoStatistics
@@ -56,6 +61,14 @@ public static class ShipmentIntelligence
         shipment.shipmentName = string.IsNullOrWhiteSpace(shipment.shipmentName) ? "Chuyến hàng mới" : shipment.shipmentName.Trim();
         shipment.cargoTypes ??= new List<CargoType>();
         shipment.containers ??= new List<LoadingPlan>();
+        shipment.scenarios ??= new List<OptimizationScenario>();
+        shipment.optimizationSettings ??= new OptimizationSettings();
+        shipment.history ??= new List<ShipmentChange>();
+        foreach (var scenario in shipment.scenarios.Where(x => x != null))
+        {
+            scenario.containers ??= new List<LoadingPlan>(); scenario.metrics ??= new OptimizationMetrics(); scenario.warnings ??= new List<string>();
+            foreach (var candidate in scenario.containers.Where(x => x != null)) { PlanValidation.Normalize(candidate); candidate.cargoTypes = shipment.cargoTypes; candidate.shipmentId = shipment.id; }
+        }
         foreach (var container in shipment.containers.Where(x => x != null))
         {
             container.id = string.IsNullOrWhiteSpace(container.id) ? Guid.NewGuid().ToString("N") : container.id.Trim();
@@ -133,6 +146,10 @@ public static class ShipmentIntelligence
         foreach (var item in stats.Cargo)
             if (item.Placed > item.Required) report.errors.Add($"Loại hàng {item.Type.code} đã vượt số lượng chuyến hàng.");
             else if (item.Remaining > 0) report.warnings.Add($"Còn {item.Remaining} kiện {item.Type.code} chưa được xếp.");
+        if (shipment.scenarios.Count > 4) report.errors.Add("Tối đa 3 phương án đề xuất và 1 bản khôi phục.");
+        foreach (var scenario in shipment.scenarios.Where(x => x != null))
+            foreach (var candidate in scenario.containers.Where(x => x != null))
+                if (!PlanValidation.TryValidate(candidate, out var scenarioError)) report.errors.Add($"{scenario.name}: {scenarioError}");
         return report;
     }
 

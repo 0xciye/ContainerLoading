@@ -16,7 +16,7 @@ public class CargoType
     public bool stackable = true;
 }
 [Serializable]
-public class PlacedCargo { public string id, cargoTypeId; public Vector3Int position; public Vector3Int size; public int rotation; }
+public class PlacedCargo { public string id, cargoTypeId; public Vector3Int position; public Vector3Int size; public int rotation; public bool locked; }
 [Serializable]
 public class LoadingPlan
 {
@@ -37,6 +37,8 @@ public class LoadingPlan
     public ContainerConfig container = new();
     public List<CargoType> cargoTypes = new();
     public List<PlacedCargo> placedCargo = new();
+    public List<LoadingStep> loadingSequence = new();
+    public string doorSide = "X0";
     public string createdAt = DateTime.UtcNow.ToString("O");
     public string updatedAt = DateTime.UtcNow.ToString("O");
 }
@@ -126,6 +128,8 @@ public static class PlanValidation
         plan.container.name = Clean(plan.container.name);
         plan.cargoTypes ??= new List<CargoType>();
         plan.placedCargo ??= new List<PlacedCargo>();
+        plan.loadingSequence ??= new List<LoadingStep>();
+        if (string.IsNullOrWhiteSpace(plan.doorSide)) plan.doorSide = "X0";
         foreach (var type in plan.cargoTypes.Where(x => x != null))
         {
             type.id = Clean(type.id); type.code = Clean(type.code); type.name = Clean(type.name);
@@ -207,7 +211,12 @@ public static class GridPlacement
         foreach (var box in plan.placedCargo)
         {
             if (!string.IsNullOrEmpty(ignoreId) && box.id == ignoreId) continue;
-            if (Overlaps(position, size, box.position, box.size)) { error = "Vị trí đang bị chiếm."; return false; }
+            if (Overlaps(position, size, box.position, box.size))
+            {
+                var occupiedBy = plan.cargoTypes.Find(x => x.id == box.cargoTypeId)?.code ?? box.id;
+                error = $"Không thể đặt: chồng lên hàng {occupiedBy}.";
+                return false;
+            }
         }
         if (position.z > 0 && !FootprintIsSupported(plan, position, size, ignoreId)) { error = "Hàng chưa được đỡ kín bởi tầng bên dưới."; return false; }
         error = null; return true;

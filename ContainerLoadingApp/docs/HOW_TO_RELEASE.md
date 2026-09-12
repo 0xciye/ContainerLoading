@@ -4,7 +4,7 @@ Quy trình production:
 
 1. Commit code và push nhánh `main`.
 2. GitHub Actions chạy EditMode tests.
-3. Workflow build APK đã ký, tự tăng `versionCode` và đặt `versionName` dạng `3.0.<run_number>`.
+3. Workflow build APK đã ký, tự tăng `versionCode` và đặt `versionName` dạng `4.0.<run_number>`.
 4. GitHub Release được tạo với asset cố định `ContainerLoading.apk`.
 5. Ứng dụng kiểm tra repository `0xciye/ContainerLoading` sau khi Home đã sẵn sàng và chỉ hiện thông báo khi có bản mới.
 

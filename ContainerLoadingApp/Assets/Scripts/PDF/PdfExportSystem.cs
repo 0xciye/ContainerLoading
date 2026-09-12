@@ -118,22 +118,79 @@ public static class PdfExportSystem
         Text(summary, 40, 684, 9, $"Khách hàng: {shipment.customerName}    Điểm đến: {shipment.destination}    Ngày đóng: {shipment.loadingDate}");
         Kpi(summary, 40, 610, 118, stats.ContainerCount.ToString(), "CONTAINER"); Kpi(summary, 170, 610, 118, stats.CargoTypeCount.ToString(), "LOẠI HÀNG"); Kpi(summary, 300, 610, 118, $"{stats.PlacedUnits}/{stats.TotalUnits}", "ĐÃ XẾP"); Kpi(summary, 430, 610, 125, $"{stats.CompletionPercent:0.#}%", "TIẾN ĐỘ");
         Text(summary, 40, 580, 11, $"Tổng trọng lượng: {stats.TotalWeight:0.##} kg    Còn lại: {stats.RemainingUnits} kiện    Trạng thái: {health.StatusLabel}");
-        Text(summary, 40, 540, 12, "TỔNG HỢP CONTAINER"); float summaryY = 516;
+        var selectedScenario = shipment.scenarios?.FirstOrDefault(x => x.id == shipment.selectedScenarioId) ?? shipment.scenarios?.FirstOrDefault(x => x.recommended);
+        if (selectedScenario != null)
+        {
+            Text(summary, 40, 560, 11, "ĐỀ XUẤT ĐIỀU HÀNH: " + selectedScenario.name);
+            var reasonY = 544f; foreach (var line in Wrap(selectedScenario.explanation, 92)) { Text(summary, 48, reasonY, 8, line); reasonY -= 13; }
+        }
+        var containerHeaderY = selectedScenario == null ? 540f : 486f;
+        Text(summary, 40, containerHeaderY, 12, "TỔNG HỢP CONTAINER"); float summaryY = containerHeaderY - 24;
         foreach (var container in shipment.containers)
         {
             var cs = PlanIntelligence.Statistics(container); var state = PlanIntelligence.Check(container).IsValid ? "Hợp lệ" : "Cần kiểm tra";
             foreach (var line in Wrap($"{ShipmentIntelligence.containerNumberOrName(container)} · {container.containerType} · {cs.PlacedQuantity} kiện · {cs.UtilizationPercent:0.#}% · {cs.PlacedWeight:0.##} kg · {state}", 94)) { Text(summary, 48, summaryY, 9, line); summaryY -= 15; }
         }
         pages.Add(summary);
+        var comparable = shipment.scenarios?.Where(x => !x.workingSnapshot).Take(3).ToList();
+        if (comparable != null && comparable.Count > 0)
+        {
+            var compare = NewPage("SO SÁNH PHƯƠNG ÁN", anchor); float compareY = 720;
+            Text(compare, 40, compareY, 9, "Phương án · Container · Hoàn thành · Sử dụng TB / thấp nhất"); compareY -= 14;
+            Text(compare, 40, compareY, 9, "Cân bằng tải · Trình tự · Cảnh báo"); compareY -= 25;
+            foreach (var scenario in comparable)
+            {
+                var m = scenario.metrics; var marker = scenario.recommended ? "ĐỀ XUẤT · " : "";
+                AddSectionRows(pages, ref compare, ref compareY, marker + scenario.name, anchor, new[]
+                {
+                    $"{m.containerCount} container · {m.placed}/{m.totalCargo} kiện · {m.completionPercent:0.#}%",
+                    $"Sử dụng {m.averageUtilization:0.#}% / thấp nhất {m.minimumUtilization:0.#}% · Tải {m.weightBalance} · Trình tự {m.loadingFeasibility} · {m.warnings} cảnh báo",
+                    string.IsNullOrWhiteSpace(scenario.explanation) ? "Ứng viên được tạo bằng heuristic deterministic; không tuyên bố tối ưu tuyệt đối." : scenario.explanation
+                });
+            }
+            pages.Add(compare);
+        }
         var cargoPage = NewPage("SHIPMENT CARGO SUMMARY", anchor); float cargoY = 720; Text(cargoPage, 40, cargoY, 9, "Mã / Tên hàng · Bắt buộc · Đã xếp · Còn lại · Phân bổ theo container"); cargoY -= 24;
         AddSectionRows(pages, ref cargoPage, ref cargoY, "TỔNG HỢP VÀ PHÂN BỔ", anchor, stats.Cargo.Select(item => $"{item.Type.code} / {item.Type.name} · {item.Required} · {item.Placed} · {item.Remaining} · " + string.Join(", ", item.Distribution.Select(d => $"{shipment.containers.Find(c => c.id == d.Key)?.containerNumber ?? d.Key.Substring(0, Math.Min(6, d.Key.Length))}: {d.Value}")))); pages.Add(cargoPage);
         foreach (var container in shipment.containers)
         {
             var page = NewPage("CONTAINER - " + ShipmentIntelligence.containerNumberOrName(container), container); DrawViews(page, container); pages.Add(page);
-            var detail = NewPage("CARGO - " + ShipmentIntelligence.containerNumberOrName(container), container); float detailY = 720; var cs = PlanIntelligence.Statistics(container); Text(detail, 40, detailY, 10, $"Đã xếp {cs.PlacedQuantity} kiện · Sử dụng {cs.UtilizationPercent:0.#}% · {cs.PlacedWeight:0.##} kg"); detailY -= 25;
+            var detail = NewPage("CARGO - " + ShipmentIntelligence.containerNumberOrName(container), container); float detailY = 720; var cs = PlanIntelligence.Statistics(container); var wd = WeightDistributionCalculator.Calculate(container); Text(detail, 40, detailY, 10, $"Đã xếp {cs.PlacedQuantity} kiện · Sử dụng {cs.UtilizationPercent:0.#}% · {cs.PlacedWeight:0.##} kg"); detailY -= 22;
+            if (wd.totalWeight > 0) { Text(detail, 40, detailY, 9, $"CHỈ BÁO LẬP KẾ HOẠCH TẢI · Trái {wd.leftPercent:0.#}% / Phải {wd.rightPercent:0.#}% · Cửa {wd.frontPercent:0.#}% / Cuối {wd.rearPercent:0.#}% · {wd.classification}"); detailY -= 22; }
             AddSectionRows(pages, ref detail, ref detailY, "CHI TIẾT CONTAINER", container, container.cargoTypes.Select(type => $"{type.code} / {type.name} · {container.placedCargo.Count(x => x.cargoTypeId == type.id)} kiện · màu #{ColorUtility.ToHtmlStringRGB(type.color)}")); pages.Add(detail);
+            LoadingSequencePlanner.Generate(container, out var sequenceWarning);
+            if (container.loadingSequence.Count > 0)
+            {
+                var sequence = NewPage("HƯỚNG DẪN ĐÓNG HÀNG - " + ShipmentIntelligence.containerNumberOrName(container), container); float sequenceY = 720;
+                Text(sequence, 40, sequenceY, 9, "Cửa container ở phía Cột 1 (X=0). Hàng sâu phía cuối được xếp trước."); sequenceY -= 24;
+                var grouped = BuildLoadingBatches(container.loadingSequence);
+                AddSectionRows(pages, ref sequence, ref sequenceY, "THỨ TỰ ĐÓNG HÀNG", container, grouped);
+                if (!string.IsNullOrWhiteSpace(sequenceWarning)) AddSectionRows(pages, ref sequence, ref sequenceY, "CẢNH BÁO", container, new[] { sequenceWarning });
+                pages.Add(sequence);
+            }
         }
         return pages;
+    }
+
+    static IEnumerable<string> BuildLoadingBatches(IEnumerable<LoadingStep> steps)
+    {
+        var ordered = steps.OrderBy(x => x.step).ToList();
+        for (var index = 0; index < ordered.Count;)
+        {
+            var first = ordered[index];
+            var last = first;
+            var count = 1;
+            index++;
+            while (index < ordered.Count && ordered[index].step == last.step + 1 &&
+                   ordered[index].cargoCode == first.cargoCode && ordered[index].zone == first.zone &&
+                   ordered[index].note == first.note)
+            {
+                last = ordered[index++];
+                count++;
+            }
+            var range = first.step == last.step ? first.step.ToString() : $"{first.step}-{last.step}";
+            yield return $"Bước {range} · {first.cargoCode} · {count} kiện · {first.zone} · {first.note}";
+        }
     }
 
     static void Kpi(StringBuilder page,float x,float y,float width,string value,string label)

@@ -2,12 +2,12 @@
 
 ## Bản APK có sẵn
 
-File: `Builds/Android/ContainerLoadingApp-v3.1.0.apk`
+File: `Builds/Android/ContainerLoadingApp-v4.0.0.apk`
 
 - Package: `com.ciye.containerloading`
 - Kiến trúc: ARM64
 - Android tối thiểu: Android 8.0 / API 26
-- Phiên bản ứng dụng: 3.1.0, version code 5
+- Phiên bản ứng dụng: 4.0.0, version code 6
 - Chữ ký local QA: keystore release ổn định, RSA 4096
 - Splash Unity: tắt
 - Launcher icon: `Assets/Resources/AppIcon.png`
@@ -21,7 +21,7 @@ Android Build Support, SDK, NDK và OpenJDK đã được cài cho Unity `6000.5
 Trong Unity Editor, chọn Android rồi Build, hoặc chạy:
 
 ```powershell
-unity build "C:\\Users\\CiyE\\Desktop\\3d container\\ContainerLoadingApp" --target Android --execute-method AndroidBuilder.Build --output-path "C:\\Users\\CiyE\\Desktop\\3d container\\ContainerLoadingApp\\Builds\\Android\\ContainerLoadingApp-v3.1.0.apk" --allow-dirty-build --timeout 900
+unity build "C:\\Users\\CiyE\\Desktop\\3d container\\ContainerLoadingApp" --target Android --execute-method AndroidBuilder.Build --output-path "C:\\Users\\CiyE\\Desktop\\3d container\\ContainerLoadingApp\\Builds\\Android\\ContainerLoadingApp-v4.0.0.apk" --allow-dirty-build --timeout 900
 ```
 
 Script build nằm tại `Assets/Editor/AndroidBuilder.cs`. Scene phát hành là `Assets/Scenes/SampleScene.unity`.
@@ -31,7 +31,7 @@ Script build nằm tại `Assets/Editor/AndroidBuilder.cs`. Scene phát hành l�
 Khi điện thoại đã bật USB debugging và xuất hiện trong `adb devices`:
 
 ```powershell
-adb install -r "Builds\\Android\\ContainerLoadingApp-v3.1.0.apk"
+adb install -r "Builds\\Android\\ContainerLoadingApp-v4.0.0.apk"
 adb shell am start -n com.ciye.containerloading/com.unity3d.player.UnityPlayerGameActivity
 ```
 

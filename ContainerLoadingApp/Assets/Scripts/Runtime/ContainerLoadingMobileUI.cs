@@ -479,6 +479,7 @@ public sealed partial class ContainerLoadingApp
         var content = MobileScroll(panel, 0, 0);
         StatusBanner(content, status);
         var cameras = Horizontal(content, "ViewMode", 8); MobileButton(cameras, "3D", ResetCamera, true); MobileButton(cameras, "Trên", TopView); MobileButton(cameras, "Trước", FrontView); MobileButton(cameras, "Bên", SideView);
+        var door = Vertical(content, "DoorAndSequence", UiSurface, 8, 18); MobileText(door, "CỬA CONTAINER  ·  PHÍA CỘT 1 (X=0)", 23, UiPrimary, FontStyle.Bold); var sequence = Horizontal(door, "SequenceControls", 8); MobileButton(sequence, "TẠO TRÌNH TỰ", GenerateLoadingSequence, true); MobileButton(sequence, "BƯỚC TRƯỚC", () => MoveSequenceStep(-1)); MobileButton(sequence, "BƯỚC TIẾP", () => MoveSequenceStep(1));
         var modeRow = Horizontal(content, "PlacementMode", 12);
         MobileButton(modeRow, "Chạm trên 3D", () => SetPlacementInputMode(PlacementInputMode.Touch), placementInputMode == PlacementInputMode.Touch);
         MobileButton(modeRow, "Nút điều hướng", () => SetPlacementInputMode(PlacementInputMode.Controls), placementInputMode == PlacementInputMode.Controls);
@@ -515,7 +516,7 @@ public sealed partial class ContainerLoadingApp
         {
             var selectedTypeData=plan.cargoTypes.Find(x=>x.id==selected.cargoTypeId);var selectedPanel=Vertical(content,"SelectedCargo",UiSurface,7,22);
             MobileText(selectedPanel,"Kiện đang chọn",26,UiPrimary,FontStyle.Bold);MobileText(selectedPanel,(selectedTypeData?.code??"?")+"  ·  Cột "+(selected.position.x+1)+", Hàng "+(selected.position.y+1)+", Tầng "+(selected.position.z+1)+"  ·  "+selected.rotation+"°",23,UiText);if(selectedTypeData!=null)MobileText(selectedPanel,$"Kích thước {selected.size.x}×{selected.size.y}×{selected.size.z} ô · {selectedTypeData.weightPerUnit:0.##} kg",21,UiMuted);
-            var tools=Horizontal(selectedPanel,"SelectedActions");MobileButton(tools,"Tập trung",FocusSelected);MobileButton(tools,"Di chuyển",MoveSelected);MobileButton(tools,"Xoay",RotateSelected);MobileButton(tools,"Xóa",DeleteSelected,false,true);
+            var tools=Horizontal(selectedPanel,"SelectedActions");MobileButton(tools,"Tập trung",FocusSelected);MobileButton(tools,"Di chuyển",MoveSelected);MobileButton(tools,"Xoay",RotateSelected);var lockTools=Horizontal(selectedPanel,"LockActions");MobileButton(lockTools,selected.locked?"Mở khóa vị trí":"Khóa vị trí",ToggleSelectedLock,selected.locked);MobileButton(lockTools,"Xóa",DeleteSelected,false,true);
         }
         var saveRow = Horizontal(content, "SaveEditor"); MobileButton(saveRow, "Hủy xem trước", CancelPreview); MobileButton(saveRow, "LƯU SƠ ĐỒ", () => { TrySaveCurrent(); RefreshMobileUI(); }, true);
     }
@@ -593,6 +594,7 @@ public sealed partial class ContainerLoadingApp
 
     void RequestBackNavigation()
     {
+        if (optimizationRunning) { CancelOptimization(); return; }
         if (screen == ScreenMode.Editor && placementMode) { CancelPreview(); return; }
         Action leave = () => { formDirty = false; if (screen == ScreenMode.Editor || screen == ScreenMode.Cargo || screen == ScreenMode.Container && editingContainer) OpenDetail(); else OpenHome(); };
         if ((screen == ScreenMode.Container || screen == ScreenMode.Cargo) && formDirty)
