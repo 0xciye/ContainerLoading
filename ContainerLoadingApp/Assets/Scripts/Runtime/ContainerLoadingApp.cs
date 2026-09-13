@@ -140,7 +140,7 @@ public sealed partial class ContainerLoadingApp : MonoBehaviour
     void Section(string text){GUILayout.Space(8);GUILayout.Label(text,heading);GUILayout.Space(3);}
     void Field(string text,ref string value){GUILayout.Label(text,label);value=GUILayout.TextField(value,input);GUILayout.Space(5);}
     void Notice(){if(!string.IsNullOrWhiteSpace(status)){GUILayout.BeginVertical(card);GUILayout.Label(status,label);GUILayout.EndVertical();}}
-    void OpenHome(){screen=ScreenMode.Home;scroll=Vector2.zero;deletePlanPath=null;deleteCargoTarget=null;if(mobileCanvas)RefreshMobileUI();}
+    void OpenHome(){screen=ScreenMode.Home;scroll=Vector2.zero;deletePlanPath=null;deleteCargoTarget=null;status="Sẵn sàng";if(mobileCanvas)RefreshMobileUI();}
     void OpenDetail(){if(!TrySaveCurrent())return;screen=ScreenMode.Detail;scroll=Vector2.zero;selectedId=null;placementMode=false;suppressEditorPointer=false;if(mobileCanvas)RefreshMobileUI();}
 
     bool TrySaveCurrent(string previousPath=null)
@@ -194,6 +194,15 @@ public sealed partial class ContainerLoadingApp : MonoBehaviour
         try{lastPdf=PdfExportSystem.Export(shipment);status="Đã tạo báo cáo PDF cấp chuyến hàng.";succeeded=true;}
         catch(Exception exception){Debug.LogException(exception);status="Không thể tạo PDF. Hãy kiểm tra dữ liệu và dung lượng lưu trữ.";}
         finally{busy=false;if(mobileCanvas){RefreshMobileUI();if(succeeded)ShowPdfReadyDialog();}}
+    }
+
+    void ExportOperationalPdf()
+    {
+        if (busy) return;
+        var succeeded = false; busy = true;
+        try { lastPdf = PdfExportSystem.ExportOperational(shipment); status = "Đã tạo hướng dẫn đóng hàng."; succeeded = true; }
+        catch (Exception exception) { Debug.LogException(exception); status = "Không thể tạo hướng dẫn đóng hàng."; }
+        finally { busy = false; if (mobileCanvas) { RefreshMobileUI(); if (succeeded) ShowPdfReadyDialog(); } }
     }
 
     void OpenPdf(){status=!string.IsNullOrEmpty(lastPdf)&&PdfPlatform.Open(lastPdf)?"Đã mở báo cáo PDF.":"Không tìm thấy PDF hoặc thiết bị không có ứng dụng mở PDF.";if(mobileCanvas)RefreshMobileUI();}

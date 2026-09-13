@@ -96,6 +96,13 @@ public sealed class V4PlanningTests
         Assert.AreEqual("BOUNDARY", boundary.code);
     }
 
+    [Test] public void ReportLocalizationProvidesVietnameseAndSimplifiedChinese()
+    {
+        StringAssert.Contains("BÁO CÁO", ReportLocalization.Get("ReportTitle"));
+        StringAssert.Contains("集装箱", ReportLocalization.Get("ReportTitle"));
+        Assert.AreEqual("Khách hàng / 客户", ReportLocalization.Inline("Customer"));
+    }
+
     static Shipment RealisticShipment()
     {
         var shipment = new Shipment { shipmentName = "V4 QA", orderReference = "ORD-V4-240", customerName = "QA Logistics", destination = "Bangkok" };

@@ -13,6 +13,7 @@ public sealed partial class ContainerLoadingApp
     ScrollRect mobileScrollRect;
     Font mobileFont;
     Sprite mobileSprite;
+    Sprite roundedSprite;
 
     static readonly Color UiBackground = new(0.953f, 0.965f, 0.976f, 1);
     static readonly Color UiSurface = Color.white;
@@ -31,11 +32,19 @@ public sealed partial class ContainerLoadingApp
         GameObject canvasObject = null;
         try
         {
-            mobileFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            mobileFont = Font.CreateDynamicFontFromOSFont(new[] { "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei UI", "Arial Unicode MS", "sans-serif" }, 32);
+            if (!mobileFont) mobileFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             var texture = new Texture2D(2, 2);
             texture.SetPixels(new[] { Color.white, Color.white, Color.white, Color.white });
             texture.Apply();
             mobileSprite = Sprite.Create(texture, new Rect(0, 0, 2, 2), new Vector2(.5f, .5f));
+            var rounded = new Texture2D(64, 64, TextureFormat.RGBA32, false);
+            for (var y = 0; y < 64; y++) for (var x = 0; x < 64; x++)
+            {
+                var dx = Mathf.Max(16 - x, x - 47, 0); var dy = Mathf.Max(16 - y, y - 47, 0);
+                rounded.SetPixel(x, y, dx * dx + dy * dy <= 256 ? Color.white : new Color(1, 1, 1, 0));
+            }
+            rounded.Apply(); roundedSprite = Sprite.Create(rounded, new Rect(0, 0, 64, 64), new Vector2(.5f, .5f), 64, 0, SpriteMeshType.FullRect, new Vector4(20, 20, 20, 20));
             canvasObject = new GameObject("MobileAppCanvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             mobileCanvas = canvasObject.GetComponent<Canvas>();
             mobileCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -140,7 +149,7 @@ public sealed partial class ContainerLoadingApp
     {
         var rect = Object(name, parent);
         var image = rect.gameObject.AddComponent<Image>();
-        image.sprite = mobileSprite; image.color = color;
+        image.sprite = roundedSprite ?? mobileSprite; image.type = roundedSprite ? Image.Type.Sliced : Image.Type.Simple; image.color = color;
         return image;
     }
 
@@ -148,7 +157,9 @@ public sealed partial class ContainerLoadingApp
     {
         var text = Object("Text", parent).gameObject.AddComponent<Text>();
         text.font = mobileFont; text.text = value; text.fontSize = size; text.color = color; text.fontStyle = style;
-        text.alignment = alignment; text.horizontalOverflow = HorizontalWrapMode.Wrap; text.verticalOverflow = VerticalWrapMode.Overflow;
+        // Align against the rendered glyph bounds so short labels sit optically in the box,
+        // not only in the font's (often asymmetric) line metrics.
+        text.alignment = alignment; text.alignByGeometry = true; text.horizontalOverflow = HorizontalWrapMode.Wrap; text.verticalOverflow = VerticalWrapMode.Overflow;
         text.raycastTarget = false;
         var explicitLines = Mathf.Max(1, (value ?? "").Count(c => c == '\n') + 1);
         var wrappedLines = Mathf.Max(explicitLines, Mathf.CeilToInt((value?.Length ?? 0) / 48f));
@@ -162,7 +173,7 @@ public sealed partial class ContainerLoadingApp
         var buttonComponent = image.gameObject.AddComponent<Button>();
         buttonComponent.targetGraphic = image;
         buttonComponent.interactable = !busy;
-        var colors = buttonComponent.colors; colors.highlightedColor = new Color(.83f, .90f, .93f); colors.pressedColor = new Color(.72f, .84f, .88f); buttonComponent.colors = colors;
+        var colors = buttonComponent.colors; colors.highlightedColor = new Color(.83f, .90f, .93f); colors.pressedColor = new Color(.72f, .84f, .88f); colors.disabledColor = new Color(.72f, .76f, .84f); buttonComponent.colors = colors;
         buttonComponent.onClick.AddListener(() => action());
         image.gameObject.AddComponent<LayoutElement>().preferredHeight = Mathf.Max(88, height);
         var text = MobileText(image.transform, value, 27, primary || danger ? Color.white : UiPrimary, FontStyle.Bold, TextAnchor.MiddleCenter);
@@ -203,6 +214,14 @@ public sealed partial class ContainerLoadingApp
         var color = danger ? UiDanger : success ? UiSuccess : UiPrimary;
         var banner = Vertical(parent, "StatusBanner", Color.Lerp(color, Color.white, .9f), 4, 18);
         MobileText(banner, message, 23, color, FontStyle.Bold);
+    }
+
+    void StatusPill(Transform parent, string message, Color color)
+    {
+        var pill = Surface(parent, "StatusPill", Color.Lerp(color, Color.white, .86f));
+        var element = pill.gameObject.AddComponent<LayoutElement>(); element.preferredWidth = 170; element.minWidth = 150; element.preferredHeight = 58; element.flexibleWidth = 0;
+        var label = MobileText(pill.transform, message, 21, color, FontStyle.Bold, TextAnchor.MiddleCenter);
+        Stretch(label.rectTransform, Vector2.zero, Vector2.one, new Vector2(12, 4), new Vector2(-12, -4));
     }
 
     void StatCard(Transform parent, string value, string caption)
@@ -343,8 +362,8 @@ public sealed partial class ContainerLoadingApp
         {
             var empty = Vertical(content, "EmptyState", UiSurface, 12, 34); empty.gameObject.AddComponent<LayoutElement>().preferredHeight = 360;
             MobileText(empty, string.IsNullOrWhiteSpace(search) ? "Chưa có phương án" : "Không tìm thấy phương án", 34, UiText, FontStyle.Bold, TextAnchor.MiddleCenter);
-            MobileText(empty, string.IsNullOrWhiteSpace(search) ? "Tạo phương án đầu tiên để bắt đầu." : "Hãy thử tên, mã đơn hàng hoặc container khác.", 24, UiMuted, FontStyle.Normal, TextAnchor.MiddleCenter);
-            if (string.IsNullOrWhiteSpace(search)) MobileButton(empty, "Tạo phương án", () => { BeginNewContainer(); RefreshMobileUI(); }, true);
+            MobileText(empty, string.IsNullOrWhiteSpace(search) ? "Tạo chuyến hàng đầu tiên để bắt đầu." : "Hãy thử tên, mã đơn hàng hoặc container khác.", 24, UiMuted, FontStyle.Normal, TextAnchor.MiddleCenter);
+            if (string.IsNullOrWhiteSpace(search)) MobileButton(empty, "Tạo chuyến hàng", () => { BeginNewContainer(); RefreshMobileUI(); }, true);
             return;
         }
         foreach (var item in entries)
@@ -365,7 +384,7 @@ public sealed partial class ContainerLoadingApp
 
     void BuildMobileContainer()
     {
-        var content = BuildPage(editingContainer ? "Chỉnh sửa phương án" : "Tạo phương án", "Thông tin đơn hàng và container", false, RequestBackNavigation);
+        var content = BuildPage(editingContainer ? "Chỉnh sửa chuyến hàng" : "Tạo chuyến hàng", "Thông tin chuyến hàng và container", false, RequestBackNavigation);
         StatusBanner(content, status);
         SectionHeader(content, "Container", "Chọn kích thước nhanh hoặc nhập tùy chỉnh");
         var presets = Horizontal(content, "Presets");
@@ -377,9 +396,9 @@ public sealed partial class ContainerLoadingApp
         MobileInput(container, "Dài (ô)", containerLength, v => containerLength = v, "", InputField.ContentType.IntegerNumber);
         MobileInput(container, "Rộng (ô)", containerWidth, v => containerWidth = v, "", InputField.ContentType.IntegerNumber);
         MobileInput(container, "Cao (ô)", containerHeight, v => containerHeight = v, "", InputField.ContentType.IntegerNumber);
-        SectionHeader(content, "Thông tin phương án");
+        SectionHeader(content, "Thông tin chuyến hàng");
         var form = Vertical(content, "PlanForm", UiSurface, 10, 24);
-        MobileInput(form, "Tên phương án", containerCode, v => containerCode = v);
+        MobileInput(form, "Tên chuyến hàng", containerCode, v => containerCode = v);
         MobileInput(form, "Mã đơn hàng / tham chiếu", orderReference, v => orderReference = v);
         MobileInput(form, "Khách hàng", customerName, v => customerName = v);
         MobileInput(form, "Số container", containerNumber, v => containerNumber = v);
@@ -387,7 +406,7 @@ public sealed partial class ContainerLoadingApp
         MobileInput(form, "Điểm đến", destination, v => destination = v);
         MobileInput(form, "Ngày đóng hàng", loadingDate, v => loadingDate = v, "VD: 12/09/2026");
         MobileMultilineInput(form, "Ghi chú", orderNotes, v => orderNotes = v);
-        MobileButton(content, editingContainer ? "LƯU THAY ĐỔI" : "TẠO PHƯƠNG ÁN", () => { SaveContainer(); RefreshMobileUI(); }, true);
+        MobileButton(content, editingContainer ? "LƯU THAY ĐỔI" : "TẠO CHUYẾN HÀNG", () => { SaveContainer(); RefreshMobileUI(); }, true);
     }
 
     void BuildMobileDetail()
@@ -409,7 +428,7 @@ public sealed partial class ContainerLoadingApp
         SectionHeader(content, "Hàng hóa");
         MobileButton(content, "Quản lý loại hàng", () => { screen = ScreenMode.Cargo; ClearCargo(); RefreshMobileUI(); });
         SectionHeader(content, "Báo cáo");
-        var reportActions=Horizontal(content,"HealthActions");MobileButton(reportActions,"KIỂM TRA PHƯƠNG ÁN",ShowPlanHealth,true);MobileButton(reportActions,"Xuất báo cáo PDF",ShowPdfExportDialog);
+        var reportActions=Horizontal(content,"HealthActions");MobileButton(reportActions,"KIỂM TRA CONTAINER",ShowPlanHealth,true);MobileButton(reportActions,"Xuất báo cáo PDF",ShowPdfExportDialog);
         var pdf = Horizontal(content, "PdfActions"); MobileButton(pdf, "Mở PDF", OpenPdf); MobileButton(pdf, "Chia sẻ", SharePdf);
         SectionHeader(content, "Thông tin đơn hàng");
         var info = Vertical(content, "OrderInfo", UiSurface, 6, 24); MobileText(info, "Mã đơn hàng: " + (string.IsNullOrWhiteSpace(plan.orderReference) ? "Chưa có" : plan.orderReference), 23, UiText); MobileText(info, "Khách hàng: " + (string.IsNullOrWhiteSpace(plan.customerName) ? "Chưa có" : plan.customerName), 23, UiText);if(!string.IsNullOrWhiteSpace(plan.containerNumber))MobileText(info,"Số container: "+plan.containerNumber,23,UiText);if(!string.IsNullOrWhiteSpace(plan.sealNumber))MobileText(info,"Niêm phong: "+plan.sealNumber,23,UiText);if(!string.IsNullOrWhiteSpace(plan.destination))MobileText(info,"Điểm đến: "+plan.destination,23,UiText);if(!string.IsNullOrWhiteSpace(plan.loadingDate))MobileText(info,"Ngày đóng hàng: "+plan.loadingDate,23,UiText); if(!string.IsNullOrWhiteSpace(plan.orderNotes))MobileText(info,"Ghi chú: "+plan.orderNotes,22,UiMuted); MobileText(info,"Cập nhật: "+FormatUpdatedAt(plan.updatedAt),21,UiMuted);

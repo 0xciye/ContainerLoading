@@ -42,7 +42,7 @@ Placement dùng grid cell làm source of truth. Khi di chuyển hoặc đặt h�
 
 Trong Unity Hub, mở project bằng Unity `6000.5.10f1`, mở `Assets/Scenes/SampleScene.unity` và nhấn Play.
 
-APK ARM64 V4.0 đã ký release tại `Builds/Android/ContainerLoadingApp-v4.0.0.apk`. Yêu cầu Android 8.0 (API 26) trở lên. Xem hướng dẫn tại `docs/ANDROID_BUILD.md`.
+APK ARM64 V4.1 đã ký release tại `Builds/Android/ContainerLoadingApp-v4.1.0.apk`. Yêu cầu Android 8.0 (API 26) trở lên. Xem hướng dẫn tại `docs/ANDROID_BUILD.md`.
 
 56 EditMode tests bao phủ thêm optimizer, determinism, scenario apply/restore, lock, loading sequence, reason code, weight/CoM, migration V3 và workflow 5 container/240 kiện qua save–restart–backup–PDF. Kiến trúc và giới hạn hiện tại được ghi tại `docs/PROJECT_DETAILS.md`.
 
